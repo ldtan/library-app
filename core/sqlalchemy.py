@@ -1,17 +1,20 @@
 # [START of Imports]
+import uuid
 from application import create_app
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 # [END of Imports]
 
-db = SQLAlchemy(create_app(), session_options={'autocommit': False})
+db = SQLAlchemy(create_app())
+db.autocommit = False
 
 class BaseModel(db.Model):
 
     __abstract__ = True
 
     # [START of Columns]
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    url_safe = db.Column(db.String(50), unique=True)
     created_on = db.Column(db.DateTime, default=datetime.utcnow)
     updated_on = db.Column(db.DateTime, onupdate=datetime.utcnow)
     deleted = db.Column(db.Boolean, default=False, nullable=False)
@@ -69,3 +72,8 @@ class BaseModel(db.Model):
 
         return {column: getattr(self, column) for column in includes
             if column not in excludes}
+
+
+    def generate_url_safe(self):
+        self.url_safe = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(self.id)))
+        return self.url_safe

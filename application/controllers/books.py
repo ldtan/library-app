@@ -1,87 +1,197 @@
 # [START of Imports]
-from application.models.book import Book
+import json
+from application.forms import BookRegistration, EditBook, UpdateBookStatus
+from application.models import BookCopy, BookStatus, Book
 from core.sqlalchemy import db
-from flask import abort, Blueprint, jsonify, request
+from datetime import datetime
+from flask import abort, Blueprint, jsonify, render_template, request, session
+from sqlalchemy.exc import SQLAlchemyError
 # [END of Imports]
 
 books = Blueprint('books', __name__, url_prefix='/books')
 
 
-@books.route('/', methods=['POST'])
-def create():
+def book_to_dict(book):
+    return_dict = book.to_dict()
+    return_dict['copies'] = [copy.to_dict() for copy in book.copies]
+
+    return return_dict
+
+
+@books.route('/register', methods=['GET', 'POST'])
+def register():
     try:
-        req_body = request.get_json()
-        record = Book(**req_body).insert()
+        if not session['logged_in']:
+            abort(401)
+
+        form = BookRegistration()
+
+        if request.method == 'GET':
+            return render_template('register_book.html', form=form)
+            
+        req_body = request.form
+
+        if 'copies' not in req_body:
+            abort(400, 'Required acquisitions')
+
+        book_dict = {key: value for key, value in req_body.iteritems()
+                if key in Book.__table__.columns}
+        book = Book(**book_dict).insert()
+
+        db.session.flush()
+
+        for acquisition in req_body['copies'].split():
+            copy = BookCopy(acquisition=acquisition, book_id=book.id).insert()
+            db.session.flush()
+            BookStatus(book_copy_id=copy.id, status='on-shelf').insert()
+
         db.session.commit()
 
-        return jsonify(record.to_dict())
+        return 'Book registered successfully'
+
+    except SQLAlchemyError as error:
+        db.session.rollback()
+        abort(400, str(error))
+
+
+@books.route('/<string:isbn>/update', methods=['GET', 'POST'])
+def edit(isbn):
+    try:
+        if not session['logged_in']:
+            abort(401)
+        
+        book = Book.query.filter_by(isbn=isbn, deleted=False)\
+                .first_or_404()
+
+        form = EditBook(**book.to_dict())
+
+        if request.method == 'GET':
+            return render_template('edit_book.html', form=form)
+
+        req_body = request.form
+
+        book_dict = {key: value for key, value in req_body.iteritems()
+                if key in Book.__table__.columns}
+        book.populate(**book_dict)
+
+        if 'add_copies' in req_body:
+            for acquisition in req_body['add_copies'].split():
+                copy = BookCopy(acquisition=acquisition, book_id=book.id).insert()
+                db.session.flush()
+                BookStatus(book_copy_id=copy.id, status='on-shelf').insert()
+
+        db.session.commit()
+
+        return 'Edited book successfully'
 
     except SQLAlchemyError as error:
         db.session.rollback()
         abort(400)
 
 
-@books.route('/<int:id>', methods=['PUT'])
-def update(id):
+@books.route('/<string:isbn>/<string:acquisition>', methods=['GET', 'POST'])
+def update_book_status(isbn, acquisition):
     try:
-        record = Book.query.filter_by(id=id, deleted=False).first()
+        if not session['logged_in']:
+            abort(401)
 
-        if record is None:
-            abort(404)
+        book = Book.query.filter_by(isbn=isbn, deleted=False).first_or_404()
+        copy = BookCopy.query.filter_by(acquisition=acquisition,
+                deleted=False).first_or_404()
+        current_status = BookStatus.query.filter_by(book_copy_id=copy.id,
+                deleted=False).order_by(BookStatus.created_on.desc())\
+                .first_or_404()
 
-        req_body = request.get_json()
-        req_body.pop('deleted', None)
-        record.populate(**req_body)
+        form = UpdateBookStatus(status=current_status.status)
+
+        if request.method == 'GET':
+            return render_template('update_book_status.html', form=form)
+
+        req_body = request.form
+
+        if req_body['status'] == current_status.status:
+            abort(400, 'No updates')
+
+        BookStatus(book_copy_id=copy.id, status=req_body['status']).insert()
         db.session.commit()
 
-        return jsonify(record.to_dict())
+        return 'Successfully updated book status'
 
     except SQLAlchemyError as error:
         db.session.rollback()
         abort(400)
 
 
-@books.route('/<int:id>', methods=['DELETE'])
-def delete(id):
-    try:
-        record = Book.query.filter_by(id=id, deleted=False).first()
+# @books.route('/copies/<string:url_safe>', methods=['PUT'])
+# def update_status(url_safe):
+#     try:
+#         req_body = request.get_json()
 
-        if record is None:
-            abort(404)
+#         # statuses = ['on-shelf', 'on-repair', 'read',
+#         #         'borrowed', 'unreturned', 'lost']
 
-        record.populate(deleted=True)
-        db.session.commit()
+#         book_status = BookStatus.query.order_by(BookStatus.created_on.desc(),
+#                 BookStatus.updated_on.desc()).first_or_404()
+#         current_status = book_status.status
+#         update_status = req_body['status']
+#         now = datetime.utcnow()
 
-        return jsonify(record.to_dict())
+#         if update_status == current_status:
+#             abort(400)
 
-    except SQLAlchemyError as error:
-        db.session.rollback()
-        abort(400)
+#         if current_status == 'reserved':
+#             if 
 
+#         elif current_status == 'borrowed':
+#             pass
 
-@books.route('/', methods=['GET'])
-def get_all():
-    sort_by = request.args.get('sort_by', 'updated_on', str)
-    order_by = request.args.get('order_by', 'desc', str)
-    limit = request.args.get('limit', None, int)
-    page = request.args.get('page', 1, int) if limit is not None else None
-
-    query = Book.query.filter_by(deleted=False)
-
-    if hasattr(Book, sort_by):
-        column = Book.get_columns()[sort_by]
-        query = query.order_by(column.desc() if sort_by == 'desc' else column)
-
-    if limit is not None:
-        query = query.limit(limit)
-
-    if page is not None:
-        query = query.offset((page - 1) * limit)
-
-    return jsonify([record.to_dict() for record in query.all()])
+#     except SQLAlchemyError as error:
+#         db.session.rollback()
+#         abort(400)
 
 
-@books.route('/<int:id>', methods=['GET'])
-def get(id):
-    record = Book.query.filter_by(id=id, deleted=False).first_or_404()
-    return jsonify(record.to_dict())
+# def book_to_dict(book):
+#     return_dict = book.to_dict()
+#     return_dict['copies'] = [copy.to_dict() for copy in book.copies]
+
+#     return return_dict
+
+
+# @books.route('/', methods=['POST'])
+# def create():
+#     try:
+#         req_body = request.get_json()
+
+#         if 'copies' not in req_body:
+#             abort(400)
+
+#         book_dict = {key: value for key, value in req_body.iteritems()
+#                 if key in Book.__table__.columns}
+#         book = Book(**book_dict).insert()
+
+#         for acquisition in req_body['copies'].split('\n'):
+#             copy = BookCopy(acquisition=acquisition, book_id=book.id).insert()
+#             BookStatus(book_copy_id=copy.id, status='registered').insert()
+#             BookStatus(book_copy_id=copy.id, status='on-shelf').insert()
+
+#         db.session.commit()
+
+#         return jsonify(book_to_dict(book))
+
+#     except SQLAlchemyError as error:
+#         db.session.rollback()
+#         abort(400)
+
+
+# @books.route('/<string:acquisition>', methods=['PUT'])
+# def update(acquisition):
+#     try:
+#         req_body = request.get_json()
+
+#         book_dict = {key: value for key, value in req_body.iteritems()
+#                 if key in Book.__table__.columns}
+        
+
+#     except SQLAlchemyError as error:
+#         db.session.rollback()
+#         abort(400)

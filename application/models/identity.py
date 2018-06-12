@@ -2,6 +2,9 @@
 from core.sqlalchemy import BaseModel, db
 # [END of Imports]
 
+"""
+Contains general information of a certain person registered in the system.
+"""
 class Identity(BaseModel):
 
     __tablename__ = 'identities'
@@ -17,6 +20,8 @@ class Identity(BaseModel):
 
     # [START of Relationships]
     accounts = db.relationship('Account', backref='identities', lazy=True)
-    books_on_hold = db.relationship('BookStatus', backref='identities', lazy=True)
-    transactions = db.relationship('Transaction', backref='identities', lazy=True)
+    book_history = db.relationship('BookStatus', backref='identities',
+            lazy=True)
+    transactions = db.relationship('Transaction', backref='identities',
+            lazy=True)
     # [END of Relationships]

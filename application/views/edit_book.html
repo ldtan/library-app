@@ -1,0 +1,15 @@
+{% from "_formhelpers.html" import render_field %}
+<form method="POST">
+    <dl>
+        {{ render_field(form.isbn) }}
+        {{ render_field(form.title) }}
+        {{ render_field(form.author) }}
+        {{ render_field(form.edition) }}
+        {{ render_field(form.publisher) }}
+        {{ render_field(form.published_on) }}
+        {{ render_field(form.description) }}
+        {{ render_field(form.add_copies) }}
+        {{ render_field(form.tags) }}
+        <p><input type="submit" value="Update"></p>
+    </dl>
+</form>

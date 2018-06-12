@@ -1,0 +1,9 @@
+{% from "_formhelpers.html" import render_field %}
+<form method="POST">
+    <dl>
+        {{ render_field(form.username) }}
+        {{ render_field(form.password) }}
+        {{ render_field(form.remember_me) }}
+        <p><input type="submit" value="Login"></p>
+    </dl>
+</form>

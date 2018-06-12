@@ -6,7 +6,7 @@ from flask import Flask
 def create_app():
     app = Flask(__name__, instance_relative_config=True)
 
-    app.template_folder = 'application/views'
+    app.template_folder = 'views'
     app.static_folder = 'application/static'
 
     # Load the default configuration

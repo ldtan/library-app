@@ -1,50 +1,27 @@
 # [START of Imports]
 from application import create_app
-from application.models import (
-    account,
-    book_status,
-    book,
-    identity,
-    transaction
-)
-from application.controllers import (
-    accounts,
-    books_status,
-    books,
-    identities,
-    transactions
-)
+from application import models
+from application import controllers
 from core.sqlalchemy import db
 # [END of Imports]
 
 if __name__ == '__main__':
     app = create_app()
     db.init_app(app)
+    db.create_all()
 
-    models = [
-        identity.Identity,
-        book.Book,
-        account.Account,
-        book_status.BookStatus,
-        transaction.Transaction
-    ]
+    # [model.create_table() for model in [
+    #     models.Identity,
+    #     models.Account,
+    #     models.Book,
+    #     models.BookCopy,
+    #     models.BookStatus,
+    #     models.Transaction
+    # ]]
 
-    for model in models:
-        try:
-            model.create_table()
-
-        except Exception as error:
-            pass
-
-    controllers = [
-        identities.identities,
-        books.books,
-        accounts.accounts,
-        books_status.books_status,
-        transactions.transactions
-    ]
-
-    for controller in controllers:
-        app.register_blueprint(controller)
+    [app.register_blueprint(controller) for controller in [
+        controllers.accounts,
+        controllers.books
+    ]]
 
     app.run()

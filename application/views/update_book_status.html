@@ -1,0 +1,7 @@
+{% from "_formhelpers.html" import render_field %}
+<form method="POST">
+    <dl>
+        {{ render_field(form.status) }}
+        <p><input type="submit" value="Update"></p>
+    </dl>
+</form>
