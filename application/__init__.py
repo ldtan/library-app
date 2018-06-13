@@ -7,7 +7,7 @@ def create_app():
     app = Flask(__name__, instance_relative_config=True)
 
     app.template_folder = 'views'
-    app.static_folder = 'application/static'
+    app.static_folder = 'static'
 
     # Load the default configuration
     app.config.from_object('config.default')
